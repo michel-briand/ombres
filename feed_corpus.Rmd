@@ -1,0 +1,54 @@
+---
+title: "Corpus d'Ombres"
+output: html_notebook
+---
+
+# Espace intéractif pour choisir les images à ajouter au corpus.
+
+Répertoire où se trouvent les images (voyages, lever de soleil, ville, campagne, ...).
+
+Visages, personnes : à voir.
+
+Les images sont affichées en vignettes, avec un mode zoom quand on survole l'image avec la souris. Le choix est simple (inclure/exclure).
+
+Le corpus se consitue rapidement.
+
+Un réseau de neurones est chargé :
+* de noter mes choix d'image
+* de décomposer les images (caractéristiques)
+* d'identifier l'image (paysage, type, heure, météo, ...)
+
+# Initialisation
+
+## Initialisation du modèle de reconnaissance
+
+le téléchargement des modèles pré-entraînés prend du temps:
+
+2335 seconds
+2797 s
+1010 s
+428 s
+  
+```{r}
+require(keras)
+preprocess_image <- function(image_path, height, width){
+  image_load(image_path, target_size = c(height, width)) %>%
+    image_to_array() %>%
+    array_reshape(dim = c(1, dim(.))) %>%
+    imagenet_preprocess_input()
+}
+model <- application_resnet50(weights = 'imagenet')
+```
+
+## Initialisation de la liste des fichiers
+
+```{r}
+PATH_TO_PHOTOS <- "~/PHOTOS"
+photos_list <- list.files(PATH_TO_PHOTOS, pattern = ".*[JjPp][PpNn][Gg]", recursive = TRUE)
+```
+
+# Travail
+
+## Enregistrer les caractéritiques d'une photo
+## Produire une image
+

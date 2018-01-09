@@ -1,0 +1,29 @@
+---
+title: "Marcher en Ombres"
+author: "Michel Briand"
+date: "25 décembre 2017"
+output: html_document
+---
+
+# Le marcheur en Ombres
+
+> Le paysage est donné.
+
+Le marcheur change un détail, un autre, et passe d'ombre en ombre.
+
+La méthode du logrus est trop brutale, désir tyranique. 
+Par petites touches, le marcheur effectue des transformations silencieuses, et accède à la Voie Royale.
+L'Imagination est plus fructueuse et plus puissante que la Volonté.
+
+> L'indiscible c'est le langage avec la Source (Mère).
+
+Le discible c'est le langage du coeur et de l'âme ouverte.
+
+## Aspects principaux
+
+Un corpus d'images permet d'emmagasiner des "patterns" :)...
+Un petit réseau de neurones pour délirer sur les détails d'une image...
+Sauvegarder l'état du réseau de neurones.
+
+## Relation avec la réalité
+
