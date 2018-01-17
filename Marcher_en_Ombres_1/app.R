@@ -26,12 +26,16 @@ identify_image <- function(image_path) {
   return(dpreds)
 }
 
-models <- c("resnet50") #,"vgg16","vgg19","inception_resnet_v2","inception_v3")
+# Quelques modèles
+# models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
+
+models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
+
 model_resnet50 <- application_resnet50(weights = 'imagenet')
-#model_vgg16 <- application_vgg16(weights = 'imagenet')
-#model_vgg19 <- application_vgg19(weights = 'imagenet')
-#model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
-#model_inception_v3 <- application_inception_v3(weights = 'imagenet')
+model_vgg16 <- application_vgg16(weights = 'imagenet')
+model_vgg19 <- application_vgg19(weights = 'imagenet')
+model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
+model_inception_v3 <- application_inception_v3(weights = 'imagenet')
 model <- model_resnet50
 
 index <- 1
@@ -105,7 +109,11 @@ server <- function(input, output, session) {
     modelSelected <<- input$modelSelect
     switch (modelSelected,
             resnet50={ model <<- model_resnet50 },
-            vgg16={ model <<- model_vgg16 })
+            vgg16={ model <<- model_vgg16 },
+            vgg19={ model <<- model_vgg19 },
+            inception_resnet_v2={ model <<- model_inception_resnet_v2 },
+            inception_v3={ model <<- model_inception_v3 }
+            )
   })
   
   output$img <- renderImage({
