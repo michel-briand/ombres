@@ -1,7 +1,11 @@
 require(shiny)
-require(keras)
+if(!require(keras)){install.packages("keras")
+  library(keras)}
+ if(!require(dplyr)){install.packages("dplyr")
+  library(dplyr)}
+load("../imagenet_class_index_fr.Rda")
 
-PATHS_TO_PHOTOS <<- c("~/PHOTOS","photos")
+PATHS_TO_PHOTOS <<- c("~/Images/40ans-cp/","photos")
 path_to_photos <- ""
 nb_photos <- 0
 
@@ -12,27 +16,40 @@ refresh_photo_list <- function(path) {
   print(photos)
 }
 
-preprocess_image <- function(image_path, height, width){
-  image_load(image_path, target_size = c(height, width)) %>%
-    image_to_array() %>%
-    array_reshape(dim = c(1, dim(.))) %>%
-    imagenet_preprocess_input()
+preprocess_image_inception <- function(image_path, model){
+  system(paste0("jhead -autorot ",image_path)) # need apt-get install jhead or equivalent
+         image_load(image_path, target_size = c(height=299, width=299)) %>%
+           image_to_array() %>%
+           array_reshape(dim = c(1, dim(.))) %>%
+           inception_resnet_v2_preprocess_input()
+}
+preprocess_image_other <- function(image_path, model){
+  system(paste0("jhead -autorot ",image_path)) # need apt-get install jhead or equivalent
+         image_load(image_path, target_size = c(height=224, width=224)) %>%
+           image_to_array() %>%
+           array_reshape(dim = c(1, dim(.))) %>%
+           imagenet_preprocess_input(mode="tf")
 }
 
-identify_image <- function(image_path) {
-  i <- preprocess_image(image_path, 224, 224)
+identify_image <- function(image_path, model) {
+  i <- preprocess_image(image_path , model)
   preds <<- model %>% predict(i)
-  dpreds <<- imagenet_decode_predictions(preds, top = 3)[[1]]
+  dpreds <<- imagenet_decode_predictions(preds, top = 3)[[1]] %>%
+    left_join(fr_tlb,by="class_name") %>%
+    select (-class_description)
+
   return(dpreds)
 }
 
-models <- c("resnet50") #,"vgg16","vgg19","inception_resnet_v2","inception_v3")
-model_resnet50 <- application_resnet50(weights = 'imagenet')
-#model_vgg16 <- application_vgg16(weights = 'imagenet')
-#model_vgg19 <- application_vgg19(weights = 'imagenet')
-#model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
+models <- c("inception_resnet_v2","resnet50","vgg19","inception_v3") #,"vgg16")
+#model_resnet50 <- application_resnet50(classes=1000) # 100 MB download
+#model_vgg16 <- application_vgg16(classes=1000) # 550 MB download
+model_vgg19 <- application_vgg19(classes=1000) #570 MB download
+model_inception_resnet_v2 <- application_inception_resnet_v2(classes = 1000) # 220 MB download
 #model_inception_v3 <- application_inception_v3(weights = 'imagenet')
-model <- model_resnet50
+#model <- application_vgg16(weights = 'imagenet', include_top = FALSE)
+#model <- application_resnet50(weights = 'imagenet')
+model <- application_inception_resnet_v2(classes = 1000)
 
 index <- 1
 #ip <- photos[index]
@@ -40,11 +57,8 @@ index <- 1
 #dpreds <- identify_image(ip)
 
 ui <- fluidPage(
-  
   title = "Marcher en Ombre",
-  
   titlePanel("Sélectionner des images de paysage"),
-
   sidebarLayout(
     sidebarPanel(
       selectInput("pathToPhotos", "Chemin vers les photos", PATHS_TO_PHOTOS),
@@ -104,8 +118,14 @@ server <- function(input, output, session) {
   observe({
     modelSelected <<- input$modelSelect
     switch (modelSelected,
-            resnet50={ model <<- model_resnet50 },
-            vgg16={ model <<- model_vgg16 })
+            inception_resnet_v2={ model <<- model_inception_resnet_v2
+                                  preprocess_image <<-preprocess_image_inception },
+            #resnet50={ model <<- model_resnet50
+            #           model$name <<-"resnet50"},
+            vgg19={ model <<- model_vgg19
+                    preprocess_image <<-preprocess_image_other })
+            #            vgg16={ model <<- model_vgg16 
+    #               model$name <<-"vgg16"})
   })
   
   output$img <- renderImage({
@@ -119,7 +139,7 @@ server <- function(input, output, session) {
     if (!file.exists(ip)) return()
     print(ip)
     if (!is.null(ip) && length(ip) > 0) {
-      dpreds <<- identify_image(ip)
+      dpreds <<- identify_image(ip,model)
       output$dpreds <- renderTable(dpreds)
     }
   })
