@@ -1,48 +1,80 @@
+#
+#
+#
+
 require(shiny)
 require(keras)
+require(dplyr) # left_join
 
+# Chemin des photos sur le disque local
 PATHS_TO_PHOTOS <<- c("~/PHOTOS","photos")
-path_to_photos <- ""
-nb_photos <- 0
 
+# Variables globales
+path_to_photos <- ""
+photos <- c()
+nb_photos <- length(photos)
+index <- 1
+
+# Quelques modèles de réseaux de neurones profonds pour la reconnaissance d'images
+h_memory <- 1
+
+if (h_memory == 1) {
+  # Peu de mémoire, nous ne chargeons qu'un seul modèle
+  models <- c("resnet50")
+  model_resnet50 <- application_resnet50(weights = 'imagenet')
+  model <- model_resnet50
+} else {
+  # Nous avons assez de mémoire pour offrir un choix de modèles à l'utilisateur
+  models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
+  model_resnet50 <- application_resnet50(weights = 'imagenet')
+  model_vgg16 <- application_vgg16(weights = 'imagenet')
+  model_vgg19 <- application_vgg19(weights = 'imagenet')
+  model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
+  model_inception_v3 <- application_inception_v3(weights = 'imagenet')
+  model <- model_resnet50
+}
+
+# Traduction de classes d'images en français,
+# (créé une variable globale 'fr_tlb' qui contient les noms
+# de classe d'image en français)
+load("imagenet_class_index_fr.Rda")
+
+#
+# Construit la liste des photos, met à jour nb_photos et index
+#
 refresh_photo_list <- function(path) {
   photos <<- list.files(path, pattern = ".*[JjPp][PpNn][Gg]", full.names = TRUE, recursive = TRUE)  
   nb_photos <<- length(photos)
   index <<- 1
-  print(photos)
 }
 
+#
+# Charge une image et la prépare pour analyse
+#
 preprocess_image <- function(image_path, height, width){
+  if (!file.exists(image_path)) return(NULL)
   image_load(image_path, target_size = c(height, width)) %>%
     image_to_array() %>%
     array_reshape(dim = c(1, dim(.))) %>%
     imagenet_preprocess_input()
 }
 
+#
+# Analyse l'image
+#
 identify_image <- function(image_path) {
   i <- preprocess_image(image_path, 224, 224)
+  if (is.null(i)) return()
   preds <<- model %>% predict(i)
-  dpreds <<- imagenet_decode_predictions(preds, top = 3)[[1]]
+  dpreds <<- imagenet_decode_predictions(preds, top = 3)[[1]] %>%
+    left_join(fr_tlb,by="class_name") %>%
+    select (-class_description)
   return(dpreds)
 }
 
-# Quelques modèles
-# models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
-
-models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
-
-model_resnet50 <- application_resnet50(weights = 'imagenet')
-model_vgg16 <- application_vgg16(weights = 'imagenet')
-model_vgg19 <- application_vgg19(weights = 'imagenet')
-model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
-model_inception_v3 <- application_inception_v3(weights = 'imagenet')
-model <- model_resnet50
-
-index <- 1
-#ip <- photos[index]
-#print(paste("Image path:", ip))
-#dpreds <- identify_image(ip)
-
+#
+# Page web interactive
+#
 ui <- fluidPage(
   
   title = "Marcher en Ombre",
@@ -58,21 +90,21 @@ ui <- fluidPage(
       actionButton("randomButton", "Hasard"),
       hr(),
       
-      selectInput("modelSelect", "Choix du modèle",
-                  models),
+      selectInput("modelSelect", "Choix du modèle", models),
       actionButton("modelButton", "Identifier l'image avec le modèle")
     ),
     
     mainPanel(
-      h3(textOutput("momo")),
+      h3(textOutput("feedback_header")),
       tableOutput("dpreds"),
       imageOutput("img", width = "400px", height = "300px")
     )
   )
 )
 
-
-
+#
+# Traitement des actions de l'utilisateur
+#
 server <- function(input, output, session) {
   
   observe({
@@ -120,22 +152,19 @@ server <- function(input, output, session) {
     list(src = input$imgpath, width="100%")
   }, deleteFile = FALSE)
 
-  observe({
-    input$modelButton
+  observeEvent(input$modelButton, {
     ip <- photos[index]
-    if (is.null(ip) || length(ip) == 0) return()
-    if (!file.exists(ip)) return()
-    print(ip)
-    if (!is.null(ip) && length(ip) > 0) {
-      dpreds <<- identify_image(ip)
-      output$dpreds <- renderTable(dpreds)
-    }
-  })
+    dpreds <<- identify_image(ip)
+    output$dpreds <- renderTable(dpreds)
+  }, ignoreInit = TRUE)
   
-  output$momo <- renderText({
+  output$feedback_header <- renderText({
     paste0("Résultats de l'analyse par le modèle ", input$modelSelect)
   })
 
 }
 
+#
+# Démarrage de l'application Shiny
+#
 shinyApp(ui, server)
