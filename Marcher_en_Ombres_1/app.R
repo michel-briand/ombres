@@ -1,5 +1,5 @@
 #
-#
+# Application Shiny de démonstration
 #
 
 require(shiny)
@@ -16,22 +16,22 @@ nb_photos <- length(photos)
 index <- 1
 
 # Quelques modèles de réseaux de neurones profonds pour la reconnaissance d'images
-h_memory <- 1
+#
+# resnet50 : le plus léger et le plus efficace (224x224)
+#
+models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
+model_resnet50 <- application_resnet50(weights = 'imagenet')
+model_vgg16 <- application_vgg16(weights = 'imagenet')
+model_vgg19 <- application_vgg19(weights = 'imagenet')
+model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
+model_inception_v3 <- application_inception_v3(weights = 'imagenet')
+model <- model_resnet50
 
-if (h_memory == 1) {
-  # Peu de mémoire, nous ne chargeons qu'un seul modèle
-  models <- c("resnet50")
-  model_resnet50 <- application_resnet50(weights = 'imagenet')
-  model <- model_resnet50
-} else {
-  # Nous avons assez de mémoire pour offrir un choix de modèles à l'utilisateur
-  models <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3")
-  model_resnet50 <- application_resnet50(weights = 'imagenet')
-  model_vgg16 <- application_vgg16(weights = 'imagenet')
-  model_vgg19 <- application_vgg19(weights = 'imagenet')
-  model_inception_resnet_v2 <- application_inception_resnet_v2(weights = 'imagenet')
-  model_inception_v3 <- application_inception_v3(weights = 'imagenet')
-  model <- model_resnet50
+#
+# Charge un modèle en mémoire et l'ajoute au tableau (data frame?) des modèles
+#
+load_model <- function(name) {
+
 }
 
 # Traduction de classes d'images en français,
@@ -63,7 +63,10 @@ preprocess_image <- function(image_path, height, width){
 # Analyse l'image
 #
 identify_image <- function(image_path) {
-  i <- preprocess_image(image_path, 224, 224)
+  height <- 224
+  width <- 224
+  print(paste("identify_image:", modelSelected, height, width, image_path))
+  i <- preprocess_image(image_path, height, width)
   if (is.null(i)) return()
   preds <<- model %>% predict(i)
   dpreds <<- imagenet_decode_predictions(preds, top = 3)[[1]] %>%
@@ -158,6 +161,9 @@ server <- function(input, output, session) {
     output$dpreds <- renderTable(dpreds)
   }, ignoreInit = TRUE)
   
+  #
+  # Essentiellement pour vérifier la sélection actuelle
+  #
   output$feedback_header <- renderText({
     paste0("Résultats de l'analyse par le modèle ", input$modelSelect)
   })

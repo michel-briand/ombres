@@ -27,3 +27,10 @@ Sauvegarder l'état du réseau de neurones.
 
 ## Relation avec la réalité
 
+## Intéraction avec l'utilisateur
+
+Ajouter une couche de neurones vierges.
+
+Utilisateur, à l'aide des possibilités interactives qui lui sont offertes,
+peut "entrainer" le modèle en fonction de ses choix.
+
