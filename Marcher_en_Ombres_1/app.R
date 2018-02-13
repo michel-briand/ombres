@@ -10,6 +10,9 @@ require(dplyr) # left_join
 PATHS_TO_PHOTOS <<- c("~/PHOTOS","photos")
 
 # Variables globales
+log_file <- "app.log"
+sink(log_file, append=TRUE, split=TRUE) 
+
 path_to_photos <- ""
 photos <- c()
 nb_photos <- length(photos)
@@ -23,7 +26,8 @@ model_names <- c("resnet50", "vgg16","vgg19","inception_resnet_v2","inception_v3
 model_width <- c( 224, 224, 224, 299, 299)
 model_height <- c( 224, 224, 224, 299, 299)
 model_model <- c(NA, NA, NA, NA, NA)
-models <- data.frame(model_names, model_width, model_height, model_model)
+model_preprocess <- c(NA, NA, NA, NA, NA)
+models <- data.frame(model_names, model_width, model_height, model_model, model_preprocess)
 modelSelected <- ""
 
 #
@@ -34,15 +38,31 @@ load_model <- function(name) {
   r <- models[model_names == name,]
   if (is.na(r$model_model)) {
     switch (name,
-          resnet50 = { model <- application_resnet50(weights = 'imagenet') },
-          vgg16={ model <- application_vgg16(weights = 'imagenet') },
-          vgg19={ model <- application_vgg19(weights = 'imagenet') },
-          inception_resnet_v2={ model <- application_inception_resnet_v2(weights = 'imagenet') },
-          inception_v3={ model <- application_inception_v3(weights = 'imagenet') }
+          resnet50 = {
+            model <- application_resnet50(weights = 'imagenet')
+            preprocess = preprocess_image
+            },
+          vgg16 = {
+            model <- application_vgg16(weights = 'imagenet')
+            preprocess = preprocess_image
+            },
+          vgg19 = {
+            model <- application_vgg19(weights = 'imagenet')
+            preprocess = preprocess_image
+            },
+          inception_resnet_v2 = {
+            model <- application_inception_resnet_v2(weights = 'imagenet')
+            preprocess = preprocess_image_inception_v2
+            },
+          inception_v3 = {
+            model <- application_inception_v3(weights = 'imagenet')
+            preprocess = preprocess_image_inception_v3
+            }
     )
     # On ne peut pas mettre une fonction (type==closure) directement dans un vecteur :)
     # donc on créé une liste
     models$model_model[model_names == name] <<- c(model)
+    models$model_preprocess[model_names == name] <<- c(preprocess)
     # pour accéder au modèle on utilisera:
     m <- models$model_model[model_names == name][[1]]
     # pour vérifier l'objet on fait
@@ -75,11 +95,35 @@ preprocess_image <- function(image_path, height, width){
     print(paste("file does not exist:", image_path))
     return(NULL)
   }
-  print(paste("loading photo:", image_path))
+  print(paste("load photo & preprocess imagenet:", image_path))
   image_load(image_path, target_size = c(height, width)) %>%
     image_to_array() %>%
     array_reshape(dim = c(1, dim(.))) %>%
     imagenet_preprocess_input()
+}
+
+preprocess_image_inception_v2 <- function(image_path, height, width){
+  if (!file.exists(image_path)) {
+    print(paste("file does not exist:", image_path))
+    return(NULL)
+  }
+  print(paste("load photo & preprocess inception v2:", image_path))
+  image_load(image_path, target_size = c(height, width)) %>%
+    image_to_array() %>%
+    array_reshape(dim = c(1, dim(.))) %>%
+    inception_resnet_v2_preprocess_input()
+}
+
+preprocess_image_inception_v3 <- function(image_path, height, width){
+  if (!file.exists(image_path)) {
+    print(paste("file does not exist:", image_path))
+    return(NULL)
+  }
+  print(paste("load photo & preprocess inception v3:", image_path))
+  image_load(image_path, target_size = c(height, width)) %>%
+    image_to_array() %>%
+    array_reshape(dim = c(1, dim(.))) %>%
+    inception_v3_preprocess_input()
 }
 
 #
@@ -88,14 +132,19 @@ preprocess_image <- function(image_path, height, width){
 identify_image <- function(image_path) {
   r <- models[model_names == modelSelected,]
   if (is.na(r$model_model)) {
-    print("error: no model (r$model_model is NA)")
+    print("error: no model object (r$model_model is NA)")
+    return()
+  }
+  if (is.na(r$model_preprocess)) {
+    print("error: no proprocess function (r$model_preprocess is NA)")
     return()
   }
   height <- r$model_height
   width <- r$model_width
   model <- r$model_model[[1]]
+  preprocess <- r$model_preprocess[[1]]
   print(paste("identify_image:", modelSelected, height, width, image_path))
-  i <- preprocess_image(image_path, height, width)
+  i <- preprocess(image_path, height, width)
   if (is.null(i)) return()
   preds <<- model %>% predict(i)
   dpreds <<- imagenet_decode_predictions(preds, top = 3)[[1]] %>%
@@ -113,26 +162,31 @@ ui <- fluidPage(
   
   titlePanel("Sélectionner des images de paysage"),
 
-  sidebarLayout(
-    sidebarPanel(
-      selectInput("pathToPhotos", "Chemin vers les photos", PATHS_TO_PHOTOS),
-      textInput("imgpath", "Photo", ""),
-      actionButton("prevButton", "Préc"),
-      actionButton("nextButton", "Suiv"),
-      actionButton("randomButton", "Hasard"),
-      hr(),
-      
-      selectInput("modelSelect", "Choix du modèle", models$model_names),
-      actionButton("modelButton", "Identifier l'image avec le modèle")
-    ),
-    
-    mainPanel(
-      h3(textOutput("feedback_header")),
-      tableOutput("dpreds"),
-      imageOutput("img", width = "400px", height = "300px"),
-      hr(),
-      
-      htmlOutput("console")
+  fluidRow(
+    sidebarLayout(
+      sidebarPanel(
+        selectInput("pathToPhotos", "Chemin vers les photos", PATHS_TO_PHOTOS),
+        textInput("imgpath", "Photo", ""),
+        actionButton("prevButton", "Préc"),
+        actionButton("nextButton", "Suiv"),
+        actionButton("randomButton", "Hasard"),
+        hr(),
+        selectInput("modelSelect", "Choix du modèle", models$model_names),
+        actionButton("modelButton", "Identifier l'image avec le modèle")
+      ),
+      mainPanel(
+        imageOutput("img", width = "400px", height = "300px"),
+        hr(),
+        h3(textOutput("feedback_header")),
+        tableOutput("dpreds")
+      )
+    )
+  ),
+  fluidRow(
+    hr(),
+    h3("Log"),
+    wellPanel(id = "tPanel",style = "margin: 2em; overflow-y:scroll; max-height: 200px",
+              htmlOutput("console", inline = TRUE)
     )
   )
 )
@@ -148,7 +202,7 @@ server <- function(input, output, session) {
   observe({
     input$pathToPhotos
     path_to_photos <<- input$pathToPhotos
-    console_text[["log"]] <- capture.output( refresh_photo_list(path_to_photos) )
+    refresh_photo_list(path_to_photos)
     updateTextInput(session, "imgpath", value = photos[index])
   })  
   
@@ -181,7 +235,7 @@ server <- function(input, output, session) {
   # charge le modèle sélectionné
   observe({
     modelSelected <<- input$modelSelect
-    console_text[["log"]] <- capture.output( load_model(modelSelected) )
+    load_model(modelSelected)
   })
   
   # affiche la photo sélectionnée
@@ -192,7 +246,7 @@ server <- function(input, output, session) {
   # analyse la photo
   observeEvent(input$modelButton, {
     ip <- photos[index]
-    console_text[["log"]] <- capture.output( dpreds <<- identify_image(ip) )
+    dpreds <<- identify_image(ip)
     output$dpreds <- renderTable(dpreds)
   }, ignoreInit = TRUE)
   
@@ -201,8 +255,21 @@ server <- function(input, output, session) {
     paste0("Résultats de l'analyse par le modèle ", input$modelSelect)
   })
 
-  output$console <- renderUI({
-    HTML(paste(console_text[["log"]],"<br/>"))
+  data <- reactivePoll(1000, session,
+                       # This function returns the time that log_file was last modified
+                       checkFunc = function() {
+                         if (file.exists(log_file))
+                           file.info(log_file)$mtime[1]
+                         else
+                           ""
+                       },
+                       # This function returns the content of log_file
+                       valueFunc = function() {
+                         readLines(log_file)
+                       }
+  )
+  output$console <- renderText({
+    c("<pre>",paste0(data(),collapse = "", sep = "\n"),"</pre>")
   })
 }
 
@@ -210,4 +277,3 @@ server <- function(input, output, session) {
 # Démarrage de l'application Shiny
 #
 shinyApp(ui, server)
- 
