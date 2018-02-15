@@ -215,3 +215,5 @@ for (i in 1:L) {
 
 # affiche le tableau des résultats trié par score
 collec_dpreds[order(collec_dpreds$score),] %>% select(class_description,score)
+# en anglais et en français
+collec_dpreds[order(collec_dpreds$score),] %>% left_join(fr_tlb,by="class_name") %>% select(-class_name)
